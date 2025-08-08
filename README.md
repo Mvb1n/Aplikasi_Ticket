@@ -16,6 +16,8 @@ Masalah Saat Ini: Untuk melihat apakah sinkronisasi berhasil atau gagal, kita ha
 
 Tujuan: Membangun halaman "Log Sinkronisasi" di Aplikasi 2. Halaman ini akan menampilkan tabel riwayat semua upaya pengiriman data ke Aplikasi 1, lengkap dengan statusnya (Berhasil atau Gagal) dan pesan error jika ada.
 
-5. Sinkronisasi Dua Arah (Update & Delete)
+
 
 ## Yang Belum
+
+1. Sinkronisasi Dua Arah (Update & Delete)

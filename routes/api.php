@@ -20,14 +20,5 @@ Route::middleware('auth:sanctum')->group(function () {
     // Rute baru untuk mengambil aset berdasarkan site
     Route::get('/v1/sites/{site}/assets', [ApiController::class, 'getAssetsBySite']);
 
-     // Rute baru untuk meng-update aset berdasarkan nomor seri
-    Route::put('/v1/assets/{serial_number}', [ApiController::class, 'updateAsset']);
-
-    // Rute baru untuk menghapus aset berdasarkan nomor seri
-    Route::delete('/v1/assets/{serial_number}', [ApiController::class, 'destroyAsset']);
-
-    // Rute baru untuk membatalkan insiden
-    Route::post('/v1/incidents/{incident}/cancel', [ApiController::class, 'cancelIncident']);
-
     // Tambahkan rute API lain di sini nanti
 });
