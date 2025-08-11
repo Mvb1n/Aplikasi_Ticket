@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\AssetCreated;
 use App\Events\AssetDeleted;
 use App\Events\AssetUpdated;
 use App\Events\AssetDeletedInApp1;
@@ -39,7 +40,8 @@ class Asset extends Model
     }
 
     protected $dispatchesEvents = [
-        'updated' => AssetUpdated::class,
-        'deleted' => AssetDeleted::class,
+        'created' => AssetCreated::class, // atau IncidentCreated
+        'updated' => AssetUpdated::class, // atau IncidentUpdated
+        'deleted' => AssetDeleted::class, // atau IncidentDeleted
     ];
 }

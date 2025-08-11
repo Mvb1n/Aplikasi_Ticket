@@ -10,18 +10,24 @@ use Illuminate\Support\Facades\Validator;
 class ApiController extends Controller
 {
 
-    public function updateAsset(Request $request, Asset $asset)
+    public function updateAsset(Request $request, $serial_number)
     {
-        // Logika validasi dan update...
-        $validatedData = $request->validate(['status' => 'required|string']);
-        $asset->update($validatedData);
-        return response()->json(['message' => 'Asset updated successfully!'], 200);
+        $asset = Asset::where('serial_number', $serial_number)->firstOrFail();
+        // Lakukan update tanpa memicu event untuk mencegah infinite loop
+        Asset::withoutEvents(function () use ($asset, $request) {
+            $asset->update($request->all());
+        });
+        return response()->json(['message' => 'Asset updated in App 1']);
     }
 
-    public function destroyAsset(Asset $asset)
+    public function deleteAsset(Request $request, $serial_number)
     {
-        $asset->delete();
-        return response()->json(null, 204); // 204 No Content adalah respons standar untuk delete
+        $asset = Asset::where('serial_number', $serial_number)->firstOrFail();
+        // Lakukan update tanpa memicu event untuk mencegah infinite loop
+        Asset::withoutEvents(function () use ($asset) {
+            $asset->delete();
+        });
+        return response()->json(['message' => 'Asset delete in App 1']);
     }
 
     public function updateIncident(Request $request, Incident $incident)

@@ -79,7 +79,9 @@ class Incident extends Model
     }
 
     protected $dispatchesEvents = [
-        'created' => IncidentCreated::class, // Ini sudah ada
+        'created' => IncidentCreated::class, 
+        'updated' => IncidentUpdated::class, 
+        'deleted' => IncidentDeleted::class, 
     ];
 
         /**
