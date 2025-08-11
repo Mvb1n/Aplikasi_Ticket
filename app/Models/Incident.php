@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Support\Str;
 use App\Events\IncidentCreated;
+use App\Events\IncidentDeleted;
+use App\Events\IncidentUpdated;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -76,7 +79,7 @@ class Incident extends Model
     }
 
     protected $dispatchesEvents = [
-    'created' => IncidentCreated::class,
+        'created' => IncidentCreated::class, // Ini sudah ada
     ];
 
         /**
@@ -88,5 +91,17 @@ class Incident extends Model
         // Satu insiden ditugaskan ke satu user.
         // Kita secara spesifik memberitahu Laravel untuk menggunakan foreign key 'assigned_to_user_id'.
         return $this->belongsTo(User::class, 'assigned_to_user_id');
+    }
+
+
+    protected static function boot()
+    {
+        parent::boot();
+        // Saat sebuah insiden akan dibuat, buatkan UUID untuknya
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
     }
 }

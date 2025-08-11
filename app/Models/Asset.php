@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Events\AssetDeleted;
+use App\Events\AssetUpdated;
 use App\Events\AssetDeletedInApp1;
 use App\Events\AssetUpdatedInApp1;
 use Illuminate\Database\Eloquent\Model;
@@ -37,7 +39,7 @@ class Asset extends Model
     }
 
     protected $dispatchesEvents = [
-    'updated' => AssetUpdatedInApp1::class,
-    'deleted' => AssetDeletedInApp1::class,
-];
+        'updated' => AssetUpdated::class,
+        'deleted' => AssetDeleted::class,
+    ];
 }

@@ -9,6 +9,35 @@ use Illuminate\Support\Facades\Validator;
 
 class ApiController extends Controller
 {
+
+    public function updateAsset(Request $request, Asset $asset)
+    {
+        // Logika validasi dan update...
+        $validatedData = $request->validate(['status' => 'required|string']);
+        $asset->update($validatedData);
+        return response()->json(['message' => 'Asset updated successfully!'], 200);
+    }
+
+    public function destroyAsset(Asset $asset)
+    {
+        $asset->delete();
+        return response()->json(null, 204); // 204 No Content adalah respons standar untuk delete
+    }
+
+    public function updateIncident(Request $request, Incident $incident)
+    {
+        // Logika validasi dan update...
+        $validatedData = $request->validate(['title' => 'required|string']);
+        $incident->update($validatedData);
+        return response()->json(['message' => 'Incident updated successfully!'], 200);
+    }
+
+    public function destroyIncident(Incident $incident)
+    {
+        $incident->delete();
+        return response()->json(null, 204);
+    }
+
     /**
      * Menerima dan menyimpan data aset baru dari API.
      */
