@@ -30,6 +30,6 @@ class SyncAssetUpdateToApp2
         $asset = $event->asset;
         // Kirim HTTP PUT/PATCH ke API Aplikasi 2
         Http::withToken($this->apiToken)
-            ->put($this->apiUrl . '/api/webhook/assets/' . $asset->serial_number, $asset->toArray());
+            ->put($this->apiUrl . '/api/v1/assets/' . $asset->serial_number, $asset->toArray());
     }
 }

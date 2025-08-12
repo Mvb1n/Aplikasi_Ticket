@@ -10,43 +10,6 @@ use Illuminate\Support\Facades\Validator;
 class ApiController extends Controller
 {
 
-    public function updateAsset(Request $request, $serial_number)
-    {
-        $asset = Asset::where('serial_number', $serial_number)->firstOrFail();
-        // Lakukan update tanpa memicu event untuk mencegah infinite loop
-        Asset::withoutEvents(function () use ($asset, $request) {
-            $asset->update($request->all());
-        });
-        return response()->json(['message' => 'Asset updated in App 1']);
-    }
-
-    public function deleteAsset(Request $request, $serial_number)
-    {
-        $asset = Asset::where('serial_number', $serial_number)->firstOrFail();
-        // Lakukan update tanpa memicu event untuk mencegah infinite loop
-        Asset::withoutEvents(function () use ($asset) {
-            $asset->delete();
-        });
-        return response()->json(['message' => 'Asset delete in App 1']);
-    }
-
-    public function updateIncident(Request $request, Incident $incident)
-    {
-        // Logika validasi dan update...
-        $validatedData = $request->validate(['title' => 'required|string']);
-        $incident->update($validatedData);
-        return response()->json(['message' => 'Incident updated successfully!'], 200);
-    }
-
-    public function destroyIncident(Incident $incident)
-    {
-        $incident->delete();
-        return response()->json(null, 204);
-    }
-
-    /**
-     * Menerima dan menyimpan data aset baru dari API.
-     */
     public function storeAsset(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -77,6 +40,26 @@ class ApiController extends Controller
         ], 201);
     }
 
+    public function updateAsset(Request $request, $serial_number)
+    {
+        $asset = Asset::where('serial_number', $serial_number)->firstOrFail();
+        // Lakukan update tanpa memicu event untuk mencegah infinite loop
+        Asset::withoutEvents(function () use ($asset, $request) {
+            $asset->update($request->all());
+        });
+        return response()->json(['message' => 'Asset updated in App 1']);
+    }
+
+    public function deleteAsset(Request $request, $serial_number)
+    {
+        $asset = Asset::where('serial_number', $serial_number)->firstOrFail();
+        // Lakukan update tanpa memicu event untuk mencegah infinite loop
+        Asset::withoutEvents(function () use ($asset) {
+            $asset->delete();
+        });
+        return response()->json(['message' => 'Asset delete in App 1']);
+    }
+
     public function storeIncident(Request $request)
     {
         // 1. Validasi data yang masuk dari Aplikasi 2
@@ -98,7 +81,8 @@ class ApiController extends Controller
         $site = Site::where('location_code', $request->site_location_code)->first();
 
         // 3. Buat tiket insiden baru dengan status 'Open'
-        $incident = Incident::create([
+        $incident = Incident::updateOrCreate([
+            'uuid' => $request->uuid, // Kunci untuk mencari
             'user_id' => $user->id,
             'site_id' => $site->id,
             'title' => $request->title,
@@ -131,6 +115,33 @@ class ApiController extends Controller
         // Event 'IncidentCreated' akan otomatis terpicu oleh Model dan mengirim notifikasi.
         return response()->json(['message' => 'Incident created and assets status updated successfully via API!'], 201);
     }
+
+    public function updateIncident(Request $request, Incident $incident, $uuid)
+    {
+        $incident = Incident::where('uuid', $uuid)->firstOrFail();
+        // Lakukan update tanpa memicu event untuk mencegah infinite loop
+        Incident::withoutEvents(function () use ($incident, $request) {
+            $incident->update($request->all());
+        });
+        return response()->json(['message' => 'Incident updated in App 1']);
+    }
+
+    public function deleteIncident(Incident $incident, $uuid)
+    {
+        $incident = Incident::where('uuid', $uuid)->firstOrFail();
+        // Lakukan update tanpa memicu event untuk mencegah infinite loop
+        Incident::withoutEvents(function () use ($incident) {
+            $incident->delete();
+        });
+        return response()->json(['message' => 'Incident delete in App 1']);
+    }
+
+    /**
+     * Menerima dan menyimpan data aset baru dari API.
+     */
+
+
+
 
     public function getSites()
     {

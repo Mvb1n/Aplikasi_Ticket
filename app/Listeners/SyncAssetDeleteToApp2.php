@@ -30,6 +30,6 @@ class SyncAssetDeleteToApp2
         $asset = $event->asset;
         // Kirim HTTP DELETE ke API Aplikasi 2
         Http::withToken($this->apiToken)
-            ->delete($this->apiUrl . '/api/webhook/assets/' . $asset->serial_number);
+            ->delete($this->apiUrl . '/api/v1/assets/' . $asset->serial_number);
     }
 }

@@ -21,12 +21,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/v1/sites/{site}/assets', [ApiController::class, 'getAssetsBySite']);
 
     // Rute untuk Update & Delete Aset
-    Route::put('/webhook/assets/{serial_number}', [ApiController::class, 'updateAsset']);
-    Route::delete('/webhook/assets/{serial_number}', [ApiController::class, 'deleteAsset']);
+    Route::put('/v1/assets/{serial_number}', [ApiController::class, 'updateAsset']);
+    Route::delete('/v1/assets/{serial_number}', [ApiController::class, 'deleteAsset']);
 
-    // Rute untuk Update & Delete Insiden
-    Route::put('/v1/incidents/{incident}', [ApiController::class, 'updateIncident']);
-    Route::delete('/v1/incidents/{incident}', [ApiController::class, 'destroyIncident']);
+    // Rute untuk Update & Delete Incident
+    Route::put('/v1/incidents/{uuid}', [ApiController::class, 'updateIncident']);
+    Route::delete('/v1/incidents/{uuid}', [ApiController::class, 'deleteIncident']);
+
 
     // Tambahkan rute API lain di sini nanti
 });
