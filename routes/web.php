@@ -20,11 +20,11 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KnowledgeBaseController;
 use App\Http\Controllers\Admin\ArticleController as AdminArticleController;
 
-    // Route::get('/buat-token', function () {
-    //     $user = User::where('email', 'admin@gmail.com')->first();
-    //     $token = $user->createToken('token-dari-route')->plainTextToken;
-    //     return response()->json(['token' => $token]);
-    // });
+    Route::get('/buat-token', function () {
+        $user = User::where('email', 'admin@gmail.com')->first();
+        $token = $user->createToken('token-dari-route')->plainTextToken;
+        return response()->json(['token' => $token]);
+    });
 
     Route::get('/', function (
         ) {return view('welcome');

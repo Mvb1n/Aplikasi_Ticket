@@ -110,7 +110,7 @@ class IncidentController extends Controller
             'chronology' => 'sometimes|required|string',
             'asset_ids' => 'nullable|array',
             'investigation_notes' => 'nullable|string',
-            'status' => 'required|in:Open,In Progress,Resolved,Closed,Cancelled',
+            'status' => 'required|in:Open,In Progress,Resolved,Closed',
             'attachment' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
             'assigned_to_user_id' => 'nullable|exists:users,id',
         ]);
@@ -138,6 +138,13 @@ class IncidentController extends Controller
         if (in_array($incident->status, ['Resolved', 'Closed'])) {
             foreach ($incident->assets as $asset) {
                 $asset->status = 'Stolen/Lost';
+                $asset->save();
+            }
+        }
+
+        if (in_array($incident->status, ['Cancelled'])) {
+            foreach ($incident->assets as $asset) {
+                $asset->status = 'In Use';
                 $asset->save();
             }
         }

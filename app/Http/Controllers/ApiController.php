@@ -60,16 +60,19 @@ class ApiController extends Controller
         return response()->json(['message' => 'Asset delete in App 1']);
     }
 
-    public function storeIncident(Request $request)
+  public function storeIncident(Request $request)
     {
-        // 1. Validasi data yang masuk dari Aplikasi 2
+        // 1. Validasi data yang masuk.
+        // Aturan validasi diubah untuk menerima array nomor seri.
         $validator = Validator::make($request->all(), [
-            'title' => 'required|string',
-            'reporter_email' => 'required|email|exists:users,email',
-            'site_location_code' => 'required|exists:sites,location_code',
-            'specific_location' => 'required|string',
-            'chronology' => 'required|string',
-            'involved_asset_sn' => 'nullable|string', // Nomor seri dipisah koma
+            'uuid'                => 'required|uuid|unique:incidents,uuid',
+            'title'               => 'required|string|max:255',
+            'reporter_email'      => 'required|email|exists:users,email',
+            'site_location_code'  => 'required|string|exists:sites,location_code',
+            'specific_location'   => 'required|string',
+            'chronology'          => 'required|string',
+            'involved_asset_sn'   => 'nullable|array', // Diubah menjadi array
+            'involved_asset_sn.*' => 'string', // Setiap item dalam array harus string
         ]);
 
         if ($validator->fails()) {
@@ -77,43 +80,46 @@ class ApiController extends Controller
         }
 
         // 2. Cari data terkait (User dan Site)
-        $user = User::where('email', $request->reporter_email)->first();
-        $site = Site::where('location_code', $request->site_location_code)->first();
+        $user = User::where('email', $request->reporter_email)->firstOrFail();
+        $site = Site::where('location_code', $request->site_location_code)->firstOrFail();
 
-        // 3. Buat tiket insiden baru dengan status 'Open'
-        $incident = Incident::updateOrCreate([
-            'uuid' => $request->uuid, // Kunci untuk mencari
-            'user_id' => $user->id,
-            'site_id' => $site->id,
-            'title' => $request->title,
-            'location' => $request->specific_location,
-            'chronology' => $request->chronology,
-            'status' => 'Open',
-        ]);
+        // 3. Buat tiket insiden baru.
+        // Menggunakan updateOrCreate untuk menangani kemungkinan UUID yang sama dikirim ulang.
+        $incident = Incident::updateOrCreate(
+            ['uuid' => $request->uuid], // Kunci untuk mencari
+            [
+                'user_id'    => $user->id,
+                'site_id'    => $site->id,
+                'title'      => $request->title,
+                'location'   => $request->specific_location,
+                'chronology' => $request->chronology,
+                'status'     => 'Open',
+            ]
+        );
 
-        // 4. Logika Otomatisasi Status Aset
-        if (!empty($request->involved_asset_sn)) {
-            // Pisahkan nomor seri yang dipisah koma menjadi array
-            $serialNumbers = array_map('trim', explode(',', $request->involved_asset_sn));
-            
-            // Cari semua aset yang cocok dengan nomor seri tersebut
-            $assets = Asset::whereIn('serial_number', $serialNumbers)->get();
-            
-            if ($assets->isNotEmpty()) {
-                // a. Tautkan aset-aset ini ke insiden yang baru dibuat
-                $incident->assets()->attach($assets->pluck('id'));
+        // 4. Logika Otomatisasi Status Aset jika ada aset yang terlibat.
+        $serialNumbers = array_filter($request->input('involved_asset_sn', []));
 
-                // b. Loop melalui setiap aset dan ubah statusnya menjadi 'Stolen/Lost'
-                foreach ($assets as $asset) {
-                    $asset->status = 'Stolen/Lost';
-                    $asset->save();
-                }
+        if (!empty($serialNumbers)) {
+            // a. Update status semua aset yang terlibat menjadi 'Stolen/Lost' dalam satu query.
+            // Ini jauh lebih efisien daripada menggunakan loop.
+            Asset::whereIn('serial_number', $serialNumbers)
+                 ->update(['status' => 'Stolen/Lost']);
+
+            // b. Dapatkan ID dari aset yang baru saja diupdate untuk ditautkan.
+            $assetIds = Asset::whereIn('serial_number', $serialNumbers)->pluck('id');
+
+            // c. Tautkan aset-aset ini ke insiden menggunakan sync untuk menghindari duplikasi.
+            if ($assetIds->isNotEmpty()) {
+                $incident->assets()->sync($assetIds);
             }
         }
 
         // 5. Kirim respons sukses.
-        // Event 'IncidentCreated' akan otomatis terpicu oleh Model dan mengirim notifikasi.
-        return response()->json(['message' => 'Incident created and assets status updated successfully via API!'], 201);
+        return response()->json([
+            'message' => 'Incident processed successfully via API!',
+            'incident_uuid' => $incident->uuid
+        ], 201);
     }
 
     public function updateIncident(Request $request, Incident $incident, $uuid)
@@ -135,6 +141,29 @@ class ApiController extends Controller
         });
         return response()->json(['message' => 'Incident delete in App 1']);
     }
+
+
+
+    public function cancelIncident(Incident $incident)
+    {
+        // 1. Ambil semua ID dari aset yang terhubung dengan insiden ini.
+        // Method pluck() sangat efisien untuk hanya mengambil satu kolom.
+        $assetIds = $incident->assets()->pluck('id');
+
+        // 2. Jika ada aset yang terhubung, jalankan satu perintah massal ke database.
+        // Ini adalah cara yang jauh lebih cepat daripada loop.
+        if ($assetIds->isNotEmpty()) {
+            Asset::whereIn('id', $assetIds)->update(['status' => 'In Use']);
+        }
+
+        // 3. Ubah status insiden menjadi "Cancelled"
+        // (Anda mungkin perlu menambahkan 'Cancelled' ke enum status di migrasi incidents)
+        $incident->status = 'Cancelled'; 
+        $incident->save();
+
+        return response()->json(['message' => 'Incident cancelled and assets restored.']);
+    }
+
 
     /**
      * Menerima dan menyimpan data aset baru dari API.

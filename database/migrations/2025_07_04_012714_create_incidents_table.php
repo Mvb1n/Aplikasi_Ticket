@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('location');
             $table->text('chronology');
             $table->text('investigation_notes')->nullable();
-            $table->enum('status', ['Open', 'In Progress', 'Resolved', 'Closed', 'Cancelled'])->default('Open');
+            $table->enum('status', ['Open', 'In Progress', 'Resolved', 'Closed'])->default('Open');
             $table->timestamps();
         });
     }
