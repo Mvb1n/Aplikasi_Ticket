@@ -142,7 +142,21 @@ class ApiController extends Controller
         return response()->json(['message' => 'Incident delete in App 1']);
     }
 
+    public function getSites()
+    {
+        // Ambil semua site, urutkan berdasarkan nama, dan pilih hanya kolom yang dibutuhkan
+        $sites = Site::orderBy('name')->get(['id', 'name', 'location_code']);
+        return response()->json($sites);
+    }
 
+    public function getAssetsBySite(Site $site)
+    {
+        // Ambil hanya aset yang statusnya "In Use" di site yang dipilih
+        $assets = $site->assets()->where('status', 'In Use')->get(['id', 'name', 'serial_number']);
+
+        // Kembalikan data dalam format JSON
+        return response()->json($assets);
+    }
 
     public function cancelIncident(Incident $incident)
     {
@@ -162,29 +176,5 @@ class ApiController extends Controller
         $incident->save();
 
         return response()->json(['message' => 'Incident cancelled and assets restored.']);
-    }
-
-
-    /**
-     * Menerima dan menyimpan data aset baru dari API.
-     */
-
-
-
-
-    public function getSites()
-    {
-        // Ambil semua site, urutkan berdasarkan nama, dan pilih hanya kolom yang dibutuhkan
-        $sites = Site::orderBy('name')->get(['id', 'name', 'location_code']);
-        return response()->json($sites);
-    }
-
-    public function getAssetsBySite(Site $site)
-    {
-        // Ambil hanya aset yang statusnya "In Use" di site yang dipilih
-        $assets = $site->assets()->where('status', 'In Use')->get(['id', 'name', 'serial_number']);
-
-        // Kembalikan data dalam format JSON
-        return response()->json($assets);
     }
 }
