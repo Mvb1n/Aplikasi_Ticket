@@ -14,7 +14,7 @@ class AssetSeeder extends Seeder
         if ($sites->isEmpty()) return;
 
         // Buat 5 Baterai
-        for ($i = 1; $i <= 5; $i++) {
+        for ($i = 1; $i <= 10; $i++) {
             Asset::create([
                 'site_id' => $sites->random()->id,
                 'category' => 'Baterai',
@@ -28,15 +28,15 @@ class AssetSeeder extends Seeder
         for ($i = 1; $i <= 5; $i++) {
             Asset::create([
                 'site_id' => $sites->random()->id,
-                'category' => 'Perangkat IT',
-                'name' => 'Laptop Dell Latitude ' . rand(5000, 9000),
-                'serial_number' => 'DELL-' . rand(10000, 99999),
+                'category' => 'BTS',
+                'name' => 'BTS ' . rand(5000, 9000),
+                'serial_number' => 'BTS-' . rand(10000, 99999),
                 'status' => 'In Use'
             ]);
         }
 
-        // Buat 5 Testing
-        for ($i = 1; $i <= 5; $i++) {
+        // Buat 10 Testing
+        for ($i = 1; $i <= 10; $i++) {
             Asset::create([
                 'site_id' => $sites->random()->id,
                 'category' => 'Testing',

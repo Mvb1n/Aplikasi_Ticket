@@ -122,6 +122,35 @@ class ApiController extends Controller
         ], 201);
     }
 
+    public function getStatuses(Request $request)
+    {
+        $request->validate(['uuids' => 'required|array']);
+
+        // Cari semua insiden yang UUID-nya ada di dalam daftar yang diminta, dan muat relasi 'site'
+        $incidents = Incident::with('site')->whereIn('uuid', $request->uuids)->get();
+
+        // Ubah hasilnya menjadi format [uuid => ['status' => ..., 'site_name' => ...]]
+        $latestData = $incidents->mapWithKeys(function ($incident) {
+            return [
+                $incident->uuid => [
+                    'status' => $incident->status,
+                    'site_name' => $incident->site?->name ?? 'N/A'
+                ]
+            ];
+        });
+
+        return response()->json($latestData);
+    }
+
+    public function showIncident(Incident $incident)
+    {
+        // Eager load semua relasi yang dibutuhkan
+        $incident->load(['user', 'site', 'assets', 'comments.user', 'attachments', 'assignedTo']);
+
+        // Kembalikan data dalam format JSON
+        return response()->json($incident);
+    }
+
     public function updateIncident(Request $request, Incident $incident, $uuid)
     {
         $incident = Incident::where('uuid', $uuid)->firstOrFail();

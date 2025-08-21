@@ -13,6 +13,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Rute untuk menerima data aset baru
     Route::post('/v1/assets', [ApiController::class, 'storeAsset']);
     Route::post('/v1/incidents', [ApiController::class, 'storeIncident']);
+    
 
      // Rute baru untuk mengambil daftar semua site
     Route::get('/v1/sites', [ApiController::class, 'getSites']);
@@ -25,6 +26,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/v1/assets/{serial_number}', [ApiController::class, 'deleteAsset']);
 
     // Rute untuk Update & Delete Incident
+    Route::post('/v1/incidents/statuses', [ApiController::class, 'getStatuses']);
+    Route::get('/v1/incidents/{incident:uuid}', [ApiController::class, 'showIncident']);
     Route::put('/v1/incidents/{uuid}', [ApiController::class, 'updateIncident']);
     Route::delete('/v1/incidents/{uuid}', [ApiController::class, 'deleteIncident']);
     Route::post('/v1/incidents/{incident:uuid}/cancel', [ApiController::class, 'cancelIncident']);

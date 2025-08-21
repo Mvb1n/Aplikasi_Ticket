@@ -21,7 +21,6 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Judul</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Site</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pelapor</th>
@@ -36,7 +35,6 @@
                             <tbody class="bg-white divide-y divide-gray-200">
                                 @forelse ($incidents as $incident)
                                     <tr>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{{ $incident->id }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $incident->title }}</td>
                                         {{-- KOLOM BARU UNTUK MENAMPILKAN SITE --}}
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $incident->site?->name ?? 'N/A' }}</td>

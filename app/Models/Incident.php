@@ -96,14 +96,14 @@ class Incident extends Model
         return $this->belongsTo(User::class, 'assigned_to_user_id');
     }
 
-    // protected static function boot()
-    // {
-    //     parent::boot();
-    //     // Saat sebuah insiden akan dibuat, buatkan UUID untuknya
-    //     static::creating(function ($model) {
-    //         if (empty($model->uuid)) {
-    //             $model->uuid = (string) Str::uuid();
-    //         }
-    //     });
-    // }
+    protected static function boot()
+    {
+        parent::boot();
+        // Saat sebuah insiden akan dibuat, buatkan UUID untuknya
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
+    }
 }

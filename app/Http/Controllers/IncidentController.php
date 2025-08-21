@@ -110,7 +110,7 @@ class IncidentController extends Controller
             'chronology' => 'sometimes|required|string',
             'asset_ids' => 'nullable|array',
             'investigation_notes' => 'nullable|string',
-            'status' => 'required|in:Open,In Progress,Resolved,Closed',
+            'status' => 'required|in:Open,In Progress,Resolved,Closed,Cancelled',
             'attachment' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
             'assigned_to_user_id' => 'nullable|exists:users,id',
         ]);
