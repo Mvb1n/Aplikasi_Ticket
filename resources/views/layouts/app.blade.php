@@ -34,7 +34,7 @@
 
                             <span class="ml-3 font-semibold text-lg whitespace-nowrap overflow-hidden transition-all duration-200"
                                   :class="isSidebarOpen ? 'w-32 opacity-100' : 'w-0 opacity-0'">
-                                Aplikasi Tiket
+                                Ineom
                             </span>
                         </div>
                     </a>

@@ -41,7 +41,7 @@ class AssetController extends Controller
             'serial_number' => 'required|string|max:255|unique:assets,serial_number',
             'category' => 'required|string|max:255',
             'site_id' => 'required|exists:sites,id',
-            'status' => 'required|in:In Use,In Repair',
+            'status' => 'required|in:In Use,In Repair,Stolen/Lost,Decommissioned',
         ]);
         Asset::create($validatedData);
         return redirect()->route('sites.show', $validatedData['site_id'])->with('success', 'Aset baru berhasil ditambahkan.');

@@ -25,10 +25,8 @@
                     Selamat Datang
                 </h2>
                 <h3 class="flex justify-center text-gray-900 dark:text-gray-100">
-                    Di Aplikasi Manajemen Site
+                    Di Prototipe Ineom
                 </h3>
-
-
                 {{ $slot }}
             </div>
         </div>

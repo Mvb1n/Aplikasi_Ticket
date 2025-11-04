@@ -8,11 +8,23 @@ use App\Models\Asset;
 use App\Models\Incident;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use App\Notifications\NewIncidentReported;
 use Illuminate\Support\Facades\Notification;
 
 class IncidentController extends Controller
 {
+
+    private string $apiUrl;
+    private string $apiToken;
+
+    public function __construct()
+    {
+        // Ambil konfigurasi dari file config/services.php yang terhubung ke .env
+        $this->apiUrl = config('services.sumber_data.url');
+        $this->apiToken = config('services.sumber_data.token');
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -37,34 +49,37 @@ class IncidentController extends Controller
      */
     public function store(Request $request)
     {
-        // 1. Validasi data dari form
         $validatedData = $request->validate([
             'title' => 'required|string|max:255',
             'site_id' => 'required|exists:sites,id',
             'location' => 'required|string|max:255',
             'chronology' => 'required|string',
-            'asset_ids' => 'nullable|array', // Validasi sebagai array
-            'asset_ids.*' => 'exists:assets,id', // Validasi setiap ID di dalam array
+            'asset_ids' => 'nullable|array',
+            'asset_ids.*' => 'exists:assets,id',
         ]);
 
-        // Buat insiden baru (tanpa info aset di sini)
+        // Buat insiden baru
         $incident = new Incident();
         $incident->user_id = Auth::id();
         $incident->site_id = $validatedData['site_id'];
         $incident->title = $validatedData['title'];
         $incident->location = $validatedData['location'];
         $incident->chronology = $validatedData['chronology'];
-        // Hapus baris yang berhubungan dengan asset_name dan serial_number tunggal
+        $incident->status = 'Open';
         $incident->save();
 
-        // Tautkan semua aset yang dipilih ke insiden ini
+        // Tautkan aset dan langsung ubah statusnya
         if (!empty($validatedData['asset_ids'])) {
+            // Tautkan aset ke insiden
             $incident->assets()->attach($validatedData['asset_ids']);
+
+            // Ubah status aset yang baru saja ditautkan
+            Asset::whereIn('id', $validatedData['asset_ids'])->update(['status' => 'Stolen/Lost']);
         }
 
-        // 5. Redirect ke halaman daftar insiden dengan pesan sukses
-        return redirect()->route('incidents.index')
-                         ->with('success', 'Laporan insiden berhasil dibuat');
+        // Event 'IncidentCreated' akan otomatis terpicu oleh Model dan mengirim notifikasi
+
+        return redirect()->route('incidents.index')->with('success', 'Laporan insiden berhasil dibuat.');
     }
 
     /**
@@ -155,12 +170,24 @@ class IncidentController extends Controller
     }
 
     /**
-     * Menghapus laporan insiden dari database (khusus Admin).
+     * Membatalkan laporan insiden dari database (khusus Admin).
      */
     public function destroy(Incident $incident)
     {
-        $this->authorize('delete', $incident);
-        $incident->delete();
-        return redirect()->route('incidents.index')->with('success', 'Laporan insiden berhasil dihapus.');
+        // Kirim permintaan cancel ke API Aplikasi 1 tanpa menghapus data lokal
+        $response = Http::withToken($this->apiToken)
+            ->timeout(240)
+            ->put("{$this->apiUrl}/api/v1/incidents/{$incident->uuid}/cancel");
+
+        $incident->status = "Cancelled"; // Update status lokal sebelum menghapus
+        $incident->save(); // Simpan perubahan status di database lokal
+
+        if ($response->successful()) {
+            return back()->with('success', 'Laporan berhasil dibatalkan! Proses sinkronisasi berjalan di latar belakang.');
+        } else {
+            // Tangani error jika permintaan gagal
+            $errorMessage = $response->json('message') ?? 'Terjadi kesalahan saat membatalkan laporan insiden.';
+            return back()->with('error', $errorMessage);
+        }
     }
 }

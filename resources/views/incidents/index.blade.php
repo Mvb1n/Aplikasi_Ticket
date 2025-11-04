@@ -25,7 +25,7 @@
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Site</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pelapor</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditugaskan</th>
+                                    {{-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditugaskan</th> --}}
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
                                     <th scope="col" class="relative px-6 py-3">
                                         <span class="sr-only">Aksi</span>
@@ -50,7 +50,6 @@
                                                 {{ $incident->status }}
                                             </span>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $incident->assignedTo?->name ?? '-' }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $incident->created_at->format('d M Y') }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                                             <a href="{{ route('incidents.show', $incident->id) }}" class="text-indigo-600 hover:text-indigo-900">Lihat Detail</a>
@@ -59,11 +58,11 @@
                                                 <a href="{{ route('incidents.edit', $incident->id) }}" class="text-blue-600 hover:text-blue-900">Edit</a>
                                             @endcan
                                             @can('delete', $incident)
-                                                <form action="{{ route('incidents.destroy', $incident->id) }}" method="POST" class="inline" onsubmit="return confirm('Yakin ingin menghapus laporan ini?');">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="text-red-600 hover:text-red-900">Hapus</button>
-                                                </form>
+                                            <form action="{{ route('incidents.destroy', $incident->id) }}" method="POST" class="inline" onsubmit="return confirm('Yakin ingin membatalkan laporan ini? Status aset terkait akan dikembalikan.');" style="display:inline;">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="text-red-600 hover:text-red-900">Batalkan</button>
+                                            </form>
                                             @endcan
                                         </td>
                                     </tr>
