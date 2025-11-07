@@ -26,8 +26,6 @@ use App\Http\Controllers\Admin\ArticleController as AdminArticleController;
         return response()->json(['token' => $token]);
     });
 
-hdthdthdth
-
     Route::get('/', function (
         ) {return view('welcome');
     });

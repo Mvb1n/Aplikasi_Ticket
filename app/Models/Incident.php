@@ -6,6 +6,8 @@ use Illuminate\Support\Str;
 use App\Events\IncidentCreated;
 use App\Events\IncidentDeleted;
 use App\Events\IncidentUpdated;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -28,6 +30,7 @@ class Incident extends Model
         'chronology',
         'status',
         'investigation_notes',
+        'attachment_paths',
         // Kita tidak memasukkan 'asset_name' atau 'serial_number' karena sudah tidak ada di tabel.
     ];
 
