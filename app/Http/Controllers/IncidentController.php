@@ -150,23 +150,29 @@ class IncidentController extends Controller
 
         // 5. Logika otomatisasi untuk mengubah status aset
         // Pastikan kita menggunakan status terbaru setelah update
+        $newStatus = null;
+
         if (in_array($incident->status, ['Resolved', 'Closed'])) {
-            foreach ($incident->assets as $asset) {
-                $asset->status = 'Stolen/Lost';
-                $asset->save();
+            $newStatus = 'Stolen/Lost';
+        } elseif (in_array($incident->status, ['Cancelled'])) {
+            $newStatus = 'In Use';
+        }
+
+        // Jika ada status baru yang perlu di-update
+        if ($newStatus) {
+            // Ambil ID aset yang terkait dengan insiden ini
+            $assetIds = $incident->assets()->pluck('assets.id');
+
+            // Lakukan SATU KALI mass update.
+            // Ini SANGAT CEPAT dan TIDAK MEMICU EVENT MODEL
+            if ($assetIds->isNotEmpty()) {
+                Asset::whereIn('id', $assetIds)->update(['status' => $newStatus]);
             }
         }
 
-        if (in_array($incident->status, ['Cancelled'])) {
-            foreach ($incident->assets as $asset) {
-                $asset->status = 'In Use';
-                $asset->save();
-            }
-        }
-
-        // 6. Arahkan kembali ke halaman detail dengan pesan sukses
+        // 6. Arahkan kembali ke halaman detail...
         return redirect()->route('incidents.show', $incident->id)
-                         ->with('success', 'Detail insiden berhasil diperbarui.');
+                        ->with('success', 'Detail insiden berhasil diperbarui.');
     }
 
     /**
@@ -174,20 +180,16 @@ class IncidentController extends Controller
      */
     public function destroy(Incident $incident)
     {
-        // Kirim permintaan cancel ke API Aplikasi 1 tanpa menghapus data lokal
-        $response = Http::withToken($this->apiToken)
-            ->timeout(240)
-            ->put("{$this->apiUrl}/api/v1/incidents/{$incident->uuid}/cancel");
+        // 1. Cukup ubah status lokal
+        $incident->status = "Cancelled";
 
-        $incident->status = "Cancelled"; // Update status lokal sebelum menghapus
-        $incident->save(); // Simpan perubahan status di database lokal
+        // 2. Simpan. Ini akan memicu event 'IncidentUpdated'
+        $incident->save(); 
 
-        if ($response->successful()) {
-            return back()->with('success', 'Laporan berhasil dibatalkan! Proses sinkronisasi berjalan di latar belakang.');
-        } else {
-            // Tangani error jika permintaan gagal
-            $errorMessage = $response->json('message') ?? 'Terjadi kesalahan saat membatalkan laporan insiden.';
-            return back()->with('error', $errorMessage);
-        }
+        // 3. Listener 'SyncIncidentUpdate' (yang sudah di-queue)
+        //    akan berjalan di background dan mengirim status "Cancelled"
+        //    ke aplikasi sumber_data tanpa menyebabkan deadlock.
+
+        return back()->with('success', 'Laporan berhasil dibatalkan! Sinkronisasi berjalan di latar belakang.');
     }
 }

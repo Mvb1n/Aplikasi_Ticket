@@ -7,9 +7,10 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
-class SyncIncidentDelete
+class SyncIncidentDelete implements ShouldQueue
 {
 
+    use InteractsWithQueue;
     private string $apiUrl;
     private string $apiToken;
 

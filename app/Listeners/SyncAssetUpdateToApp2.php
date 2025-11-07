@@ -7,8 +7,9 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
-class SyncAssetUpdateToApp2
+class SyncAssetUpdateToApp2 implements ShouldQueue
 {
+    use InteractsWithQueue;
     /**
      * Create the event listener.
      */

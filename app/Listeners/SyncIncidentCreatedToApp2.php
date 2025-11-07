@@ -8,8 +8,9 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
-class SyncIncidentCreatedToApp2
+class SyncIncidentCreatedToApp2 implements ShouldQueue
 {
+    use InteractsWithQueue;
     /**
      * Create the event listener.
      */
