@@ -64,11 +64,6 @@ class ApiController extends Controller
 
     public function storeIncident(Request $request)
     {
-        Log::info("=====================================");
-        Log::info("API: Request diterima.");
-        Log::info("API: Cek file 'attachments': " . ($request->hasFile('attachments') ? 'ADA' : 'TIDAK ADA'));
-        Log::info("API: Daftar file:", $request->file('attachments'));
-        
         // 1. Validasi data yang masuk (TERMASUK FILE)
         // Kita tetap bisa pakai $request->all() karena data teks juga ikut terkirim
         $validator = Validator::make($request->all(), [
@@ -83,7 +78,7 @@ class ApiController extends Controller
             
             // --- TAMBAHAN UNTUK VALIDASI FILE ---
             'attachments'         => 'nullable|array',
-            'attachments.*'       => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:5120', // Sesuaikan aturan (maks 5MB)
+            'attachments.*'       => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:51200', // Sesuaikan aturan (maks 5MB)
             // -------------------------------------
         ]);
 
