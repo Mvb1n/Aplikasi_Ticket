@@ -5,6 +5,8 @@ use App\Models\User;
 use App\Models\Asset;
 use App\Models\Incident;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 class ApiController extends Controller
@@ -60,10 +62,10 @@ class ApiController extends Controller
         return response()->json(['message' => 'Asset delete in App 1']);
     }
 
-  public function storeIncident(Request $request)
+    public function storeIncident(Request $request)
     {
-        // 1. Validasi data yang masuk.
-        // Aturan validasi diubah untuk menerima array nomor seri.
+        // 1. Validasi data yang masuk (TERMASUK FILE)
+        // Kita tetap bisa pakai $request->all() karena data teks juga ikut terkirim
         $validator = Validator::make($request->all(), [
             'uuid'                => 'required|uuid|unique:incidents,uuid',
             'title'               => 'required|string|max:255',
@@ -71,15 +73,38 @@ class ApiController extends Controller
             'site_location_code'  => 'required|string|exists:sites,location_code',
             'specific_location'   => 'required|string',
             'chronology'          => 'required|string',
-            'involved_asset_sn'   => 'nullable|array', // Diubah menjadi array
-            'involved_asset_sn.*' => 'string', // Setiap item dalam array harus string
+            'involved_asset_sn'   => 'nullable|array', 
+            'involved_asset_sn.*' => 'string',
+            
+            // --- TAMBAHAN UNTUK VALIDASI FILE ---
+            'attachments'         => 'nullable|array',
+            'attachments.*'       => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:51200', // Sesuaikan aturan (maks 5MB)
+            // -------------------------------------
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // 2. Cari data terkait (User dan Site)
+        // --- TAMBAHAN: PROSES PENYIMPANAN FILE ---
+        $attachmentPaths = []; // Array untuk menampung path file yang disimpan
+        
+        // Cek apakah ada file yang dikirim dengan nama 'attachments'
+        if ($request->hasFile('attachments')) {
+            
+            // Loop setiap file yang ada di dalam array 'attachments'
+            foreach ($request->file('attachments') as $file) {
+                
+                // Simpan file ke 'storage/app/public/attachments' di aplikasi INI
+                $path = $file->store('attachments', 'public');
+                
+                // Kumpulkan path-nya
+                $attachmentPaths[] = $path;
+            }
+        }
+        // ------------------------------------------
+
+        // 2. Cari data terkait (User dan Site) - (Tidak ada perubahan)
         $user = User::where('email', $request->reporter_email)->firstOrFail();
         $site = Site::where('location_code', $request->site_location_code)->firstOrFail();
 
@@ -94,28 +119,29 @@ class ApiController extends Controller
                 'location'   => $request->specific_location,
                 'chronology' => $request->chronology,
                 'status'     => 'Open',
+                
+                // --- TAMBAHAN: SIMPAN PATH FILE KE DB ---
+                // Simpan sebagai string JSON, sama seperti di aplikasi pengirim
+                'attachment_paths' => !empty($attachmentPaths) ? json_encode($attachmentPaths) : null,
+                // ----------------------------------------
             ]
         );
 
-        // 4. Logika Otomatisasi Status Aset jika ada aset yang terlibat.
+        // 4. Logika Otomatisasi Status Aset - (Tidak ada perubahan)
         $serialNumbers = array_filter($request->input('involved_asset_sn', []));
 
         if (!empty($serialNumbers)) {
-            // a. Update status semua aset yang terlibat menjadi 'Stolen/Lost' dalam satu query.
-            // Ini jauh lebih efisien daripada menggunakan loop.
             Asset::whereIn('serial_number', $serialNumbers)
-                 ->update(['status' => 'Stolen/Lost']);
-
-            // b. Dapatkan ID dari aset yang baru saja diupdate untuk ditautkan.
+                ->update(['status' => 'Stolen/Lost']);
+            
             $assetIds = Asset::whereIn('serial_number', $serialNumbers)->pluck('id');
-
-            // c. Tautkan aset-aset ini ke insiden menggunakan sync untuk menghindari duplikasi.
+            
             if ($assetIds->isNotEmpty()) {
                 $incident->assets()->sync($assetIds);
             }
         }
 
-        // 5. Kirim respons sukses.
+        // 5. Kirim respons sukses. - (Tidak ada perubahan)
         return response()->json([
             'message' => 'Incident processed successfully via API!',
             'incident_uuid' => $incident->uuid
