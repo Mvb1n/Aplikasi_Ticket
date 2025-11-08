@@ -4,6 +4,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Models\Asset;
 use App\Models\Incident;
+use App\Events\AssetUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -64,10 +65,9 @@ class ApiController extends Controller
 
     public function storeIncident(Request $request)
     {
-        // 1. Validasi data yang masuk (TERMASUK FILE)
-        // Kita tetap bisa pakai $request->all() karena data teks juga ikut terkirim
+        // 1. Validasi data (TERMASUK FILE BARU)
         $validator = Validator::make($request->all(), [
-            'uuid'                => 'required|uuid|unique:incidents,uuid',
+            'uuid'                => 'required|uuid', // Hapus unique, kita pakai updateOrCreate
             'title'               => 'required|string|max:255',
             'reporter_email'      => 'required|email|exists:users,email',
             'site_location_code'  => 'required|string|exists:sites,location_code',
@@ -76,58 +76,80 @@ class ApiController extends Controller
             'involved_asset_sn'   => 'nullable|array', 
             'involved_asset_sn.*' => 'string',
             
-            // --- TAMBAHAN UNTUK VALIDASI FILE ---
-            'attachments'         => 'nullable|array',
-            'attachments.*'       => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:51200', // Sesuaikan aturan (maks 5MB)
-            // -------------------------------------
+            // Validasi file terstruktur
+            'incident_files'   => 'nullable|array',
+            'incident_files.*' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240',
+            
+            'asset_files'   => 'nullable|array',
+            'asset_files.*'   => 'nullable|array',
+            'asset_files.*.*' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // --- TAMBAHAN: PROSES PENYIMPANAN FILE ---
-        $attachmentPaths = []; // Array untuk menampung path file yang disimpan
-        
-        // Cek apakah ada file yang dikirim dengan nama 'attachments'
-        if ($request->hasFile('attachments')) {
-            
-            // Loop setiap file yang ada di dalam array 'attachments'
-            foreach ($request->file('attachments') as $file) {
-                
-                // Simpan file ke 'storage/app/public/attachments' di aplikasi INI
-                $path = $file->store('attachments', 'public');
-                
-                // Kumpulkan path-nya
-                $attachmentPaths[] = $path;
-            }
-        }
-        // ------------------------------------------
-
-        // 2. Cari data terkait (User dan Site) - (Tidak ada perubahan)
+        // 2. Cari data terkait (User dan Site)
         $user = User::where('email', $request->reporter_email)->firstOrFail();
         $site = Site::where('location_code', $request->site_location_code)->firstOrFail();
 
-        // 3. Buat tiket insiden baru.
-        // Menggunakan updateOrCreate untuk menangani kemungkinan UUID yang sama dikirim ulang.
-        $incident = Incident::updateOrCreate(
-            ['uuid' => $request->uuid], // Kunci untuk mencari
-            [
-                'user_id'    => $user->id,
-                'site_id'    => $site->id,
-                'title'      => $request->title,
-                'location'   => $request->specific_location,
-                'chronology' => $request->chronology,
-                'status'     => 'Open',
-                
-                // --- TAMBAHAN: SIMPAN PATH FILE KE DB ---
-                // Simpan sebagai string JSON, sama seperti di aplikasi pengirim
-                'attachment_paths' => !empty($attachmentPaths) ? json_encode($attachmentPaths) : null,
-                // ----------------------------------------
-            ]
+        // 3. Temukan insiden ATAU buat baru
+        $incident = Incident::firstOrNew(
+            ['uuid' => $request->uuid]
         );
 
-        // 4. Logika Otomatisasi Status Aset - (Tidak ada perubahan)
+        // 4. Ambil struktur path yang ada (jika ada)
+        $paths = json_decode($incident->attachment_paths, true) ?? [];
+        $paths['incident_files'] = $paths['incident_files'] ?? [];
+        $paths['asset_files'] = $paths['asset_files'] ?? [];
+
+        // 5. PROSES UPLOAD FILE BARU
+        
+        // 5a. Proses "Incident Files"
+        if (!empty($request->file('incident_files'))) {
+            foreach ($request->file('incident_files') as $file) {
+                // Ambil nama file asli (yang sudah unik) dari Listener
+                $safeName = $file->getClientOriginalName();
+                $path = $file->storeAs('attachments', $safeName, 'public');
+                $paths['incident_files'][] = $path;
+            }
+        }
+        
+        // 5b. Proses "Asset Files"
+        if (!empty($request->file('asset_files'))) {
+            foreach ($request->file('asset_files') as $serialNumber => $files) {
+                // Cari asset_id berdasarkan serial_number
+                $asset = Asset::where('serial_number', $serialNumber)->first();
+                
+                // Kita akan simpan pakai ASSET_ID sebagai key, bukan S/N
+                // Ini jauh lebih baik untuk relasi di Aplikasi Ticket
+                $assetId = $asset ? $asset->id : $serialNumber; // Fallback ke S/N jika aset tdk ketemu
+                
+                if (!isset($paths['asset_files'][$assetId])) {
+                    $paths['asset_files'][$assetId] = [];
+                }
+                
+                foreach ($files as $file) {
+                    $safeName = $file->getClientOriginalName();
+                    $path = $file->storeAs('attachments', $safeName, 'public');
+                    $paths['asset_files'][$assetId][] = $path;
+                }
+            }
+        }
+        
+        // 6. Isi data insiden dan SIMPAN
+        $incident->fill([
+            'user_id'    => $user->id,
+            'site_id'    => $site->id,
+            'title'      => $request->title,
+            'location'   => $request->specific_location,
+            'chronology' => $request->chronology,
+            'status'     => 'Open',
+            'attachment_paths' => json_encode($paths), // Simpan JSON baru
+        ]);
+        $incident->save();
+
+        // 7. Logika Otomatisasi Status Aset
         $serialNumbers = array_filter($request->input('involved_asset_sn', []));
 
         if (!empty($serialNumbers)) {
@@ -137,11 +159,11 @@ class ApiController extends Controller
             $assetIds = Asset::whereIn('serial_number', $serialNumbers)->pluck('id');
             
             if ($assetIds->isNotEmpty()) {
-                $incident->assets()->sync($assetIds);
+                $incident->assets()->syncWithoutDetaching($assetIds);
             }
         }
 
-        // 5. Kirim respons sukses. - (Tidak ada perubahan)
+        // 8. Kirim respons sukses.
         return response()->json([
             'message' => 'Incident processed successfully via API!',
             'incident_uuid' => $incident->uuid
@@ -170,21 +192,45 @@ class ApiController extends Controller
 
     public function showIncident(Incident $incident)
     {
-        // Eager load semua relasi yang dibutuhkan
-        $incident->load(['user', 'site', 'assets', 'comments.user', 'attachments', 'assignedTo']);
+        // $incident otomatis ditemukan oleh Laravel via binding {incident:uuid}
+        
+        // Eager load semua relasi yang dibutuhkan oleh view 'show' di Aplikasi 1
+        $incident->load(['user', 'site', 'assets', 'comments.user', 'assignedTo', 'attachments']);
 
-        // Kembalikan data dalam format JSON
+        // Kembalikan data lengkap sebagai JSON
         return response()->json($incident);
     }
 
-    public function updateIncident(Request $request, Incident $incident, $uuid)
+    public function updateIncident(Request $request, $uuid)
     {
         $incident = Incident::where('uuid', $uuid)->firstOrFail();
-        // Lakukan update tanpa memicu event untuk mencegah infinite loop
+        
+        $newStatus = $request->input('status');
+        $oldStatus = $incident->status;
+
+        // Cek apakah statusnya BARU SAJA diubah menjadi "Cancelled"
+        if ($newStatus === 'Cancelled' && $oldStatus !== 'Cancelled') {
+            
+            $assetIds = $incident->assets()->pluck('id');
+
+            if ($assetIds->isNotEmpty()) {
+                // Lakukan Mass Update untuk mengembalikan status aset
+                Asset::whereIn('id', $assetIds)->update(['status' => 'In Use']);
+
+                // Picu event manual agar status aset sinkron kembali ke Aplikasi 1
+                $updatedAssets = Asset::whereIn('id', $assetIds)->get();
+                foreach ($updatedAssets as $asset) {
+                    event(new AssetUpdated($asset));
+                }
+            }
+        }
+        
+        // Update data insiden tanpa memicu event (mencegah deadlock)
         Incident::withoutEvents(function () use ($incident, $request) {
             $incident->update($request->all());
         });
-        return response()->json(['message' => 'Incident updated in App 1']);
+        
+        return response()->json(['message' => 'Incident updated successfully.']);
     }
 
     public function deleteIncident(Incident $incident, $uuid)
@@ -211,25 +257,5 @@ class ApiController extends Controller
 
         // Kembalikan data dalam format JSON
         return response()->json($assets);
-    }
-
-    public function cancelIncident(Incident $incident)
-    {
-        // 1. Ambil semua ID dari aset yang terhubung dengan insiden ini.
-        // Method pluck() sangat efisien untuk hanya mengambil satu kolom.
-        $assetIds = $incident->assets()->pluck('id');
-
-        // 2. Jika ada aset yang terhubung, jalankan satu perintah massal ke database.
-        // Ini adalah cara yang jauh lebih cepat daripada loop.
-        if ($assetIds->isNotEmpty()) {
-            Asset::whereIn('id', $assetIds)->update(['status' => 'In Use']);
-        }
-
-        // 3. Ubah status insiden menjadi "Cancelled"
-        // (Anda mungkin perlu menambahkan 'Cancelled' ke enum status di migrasi incidents)
-        $incident->status = 'Cancelled'; 
-        $incident->save();
-
-        return response()->json(['message' => 'Incident cancelled and assets restored.']);
     }
 }

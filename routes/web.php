@@ -42,6 +42,9 @@ use App\Http\Controllers\Admin\ArticleController as AdminArticleController;
 
         // Rute untuk semua fitur utama
         Route::resource('incidents', IncidentController::class);
+        Route::put('incidents/{incident}/cancel', [IncidentController::class, 'cancel'])
+        ->name('incidents.cancel')
+        ->middleware(['auth']);
         Route::resource('problems', ProblemController::class)->middleware('role:admin,security');
         Route::resource('users', UserController::class)->middleware('role:admin');
         Route::resource('assets', AssetController::class)->middleware('role:admin');

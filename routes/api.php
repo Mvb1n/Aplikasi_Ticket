@@ -30,7 +30,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/v1/incidents/{incident:uuid}', [ApiController::class, 'showIncident']);
     Route::put('/v1/incidents/{uuid}', [ApiController::class, 'updateIncident']);
     Route::delete('/v1/incidents/{uuid}', [ApiController::class, 'deleteIncident']);
-    Route::post('/v1/incidents/{incident:uuid}/cancel', [ApiController::class, 'cancelIncident']);
 
     // Tambahkan rute API lain di sini nanti
 });

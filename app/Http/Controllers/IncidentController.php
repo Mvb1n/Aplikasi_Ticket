@@ -6,6 +6,8 @@ use App\Models\Site;
 use App\Models\User;
 use App\Models\Asset;
 use App\Models\Incident;
+use Illuminate\Support\Arr;
+use App\Events\AssetUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -113,11 +115,10 @@ class IncidentController extends Controller
      */
     public function update(Request $request, Incident $incident)
     {
-        // 1. Otorisasi: Pastikan pengguna punya izin untuk meng-update
+        // 1. Otorisasi (Dari kode Anda)
         $this->authorize('update', $incident);
 
-        // 2. Validasi semua field yang MUNGKIN datang dari KEDUA form
-        // Aturan 'sometimes' berarti "validasi hanya jika field ini ada di dalam request".
+        // 2. Validasi (Gabungan)
         $validatedData = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'site_id' => 'sometimes|required|exists:sites,id',
@@ -126,70 +127,135 @@ class IncidentController extends Controller
             'asset_ids' => 'nullable|array',
             'investigation_notes' => 'nullable|string',
             'status' => 'required|in:Open,In Progress,Resolved,Closed,Cancelled',
-            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
             'assigned_to_user_id' => 'nullable|exists:users,id',
+            
+            // --- MODIFIKASI ---
+            // Mengganti 'attachment' (singular) menjadi 'attachments' (plural, array)
+            // Ini untuk mendukung upload file baru dari form 'Investigasi & Aksi'
+            'attachments' => 'nullable|array',
+            'attachments.*' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240', // 10MB
         ]);
 
-        // 3. Update model dengan semua data yang valid dalam satu kali operasi
-        $incident->update($validatedData);
+        // 3. Update model (Hanya field non-relasi & non-file)
+        // Kita gunakan Arr::except untuk membuang 'asset_ids' dan 'attachments'
+        // agar 'update()' tidak error.
+        $incident->update(Arr::except($validatedData, ['asset_ids', 'attachments']));
+        
+        // --- TAMBAHAN BARU: Logika File ---
+        // 4. Proses file attachment (jika ada)
+        $newAttachmentPaths = [];
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
 
-        // Jika ini adalah update dari form Edit Admin yang bisa mengubah aset
+                // --- MENJADI INI ---
+                $originalName = $file->getClientOriginalName();
+                $safeName = preg_replace("/[^A-Za-z0-9\._-]/", '', $originalName);
+                $finalName = uniqid() . '_' . $safeName;
+                $path = $file->storeAs('attachments', $finalName, 'public'); 
+                // --- AKHIR PERUBAHAN ---
+                
+                $newAttachmentPaths[] = $path;
+            }
+        }
+        // Gabungkan file lama (dari sync) dengan file baru (dari upload ini)
+        $existingPaths = json_decode($incident->attachment_paths, true) ?? [];
+        $allPaths = array_merge($existingPaths, $newAttachmentPaths);
+
+        // Simpan array path yang sudah digabung
+        $incident->attachment_paths = !empty($allPaths) ? json_encode($allPaths) : null;
+        $incident->save(); // Simpan perubahan attachment_paths
+        // --- AKHIR TAMBAHAN BARU ---
+
+        // 5. Sinkronisasi Aset (Dari kode Anda)
         if ($request->has('asset_ids')) {
             $incident->assets()->sync($request->asset_ids ?? []);
         }
-
-        // 4. Logika untuk mengunggah file jika ada
-        if ($request->hasFile('attachment')) {
-            $file = $request->file('attachment');
-            $path = $file->store('attachments/incidents', 'public');
-            $incident->attachments()->create([
-                'path' => $path,
-                'original_name' => $file->getClientOriginalName(),
-            ]);
-        }
-
-        // 5. Logika otomatisasi untuk mengubah status aset
-        // Pastikan kita menggunakan status terbaru setelah update
+        
+        // 6. Logika status aset (Dari kode Anda - SANGAT PENTING)
         $newStatus = null;
-
         if (in_array($incident->status, ['Resolved', 'Closed'])) {
             $newStatus = 'Stolen/Lost';
         } elseif (in_array($incident->status, ['Cancelled'])) {
             $newStatus = 'In Use';
         }
 
-        // Jika ada status baru yang perlu di-update
         if ($newStatus) {
-            // Ambil ID aset yang terkait dengan insiden ini
             $assetIds = $incident->assets()->pluck('assets.id');
-
-            // Lakukan SATU KALI mass update.
-            // Ini SANGAT CEPAT dan TIDAK MEMICU EVENT MODEL
             if ($assetIds->isNotEmpty()) {
                 Asset::whereIn('id', $assetIds)->update(['status' => $newStatus]);
+                
+                // Picu event untuk sinkronisasi aset (Dari kode Anda)
+                $updatedAssets = Asset::whereIn('id', $assetIds)->get();
+                foreach ($updatedAssets as $asset) {
+                    event(new AssetUpdated($asset));
+                }
             }
         }
 
-        // 6. Arahkan kembali ke halaman detail...
+        // 7. Redirect (Dari kode Anda)
         return redirect()->route('incidents.show', $incident->id)
                         ->with('success', 'Detail insiden berhasil diperbarui.');
     }
 
+
     /**
-     * Membatalkan laporan insiden dari database (khusus Admin).
+     * FUNGSI BARU UNTUK "BATALKAN"
+     * Menangani logika pembatalan secara bersih.
+     */
+    public function cancel(Incident $incident)
+    {
+        // 1. Otorisasi (jika perlu, misalnya hanya admin)
+        // $this->authorize('cancel', $incident);
+
+        // 2. Cek apakah sudah dibatalkan
+        if ($incident->status !== 'Cancelled') {
+            
+            // 3. Ambil ID aset yang terhubung
+            $assetIds = $incident->assets()->pluck('id');
+
+            if ($assetIds->isNotEmpty()) {
+                // 4. Lakukan Mass Update untuk mengembalikan status aset
+                Asset::whereIn('id', $assetIds)->update(['status' => 'In Use']);
+
+                // 5. (SANGAT PENTING) Picu event untuk setiap aset
+                //    agar Listener SyncAssetUpdateToApp2 berjalan (di queue)
+                $updatedAssets = Asset::whereIn('id', $assetIds)->get();
+                foreach ($updatedAssets as $asset) {
+                    event(new AssetUpdated($asset));
+                }
+            }
+        }
+        
+        // 6. Ubah status insiden lokal
+        $incident->status = "Cancelled";
+
+        // 7. Simpan. Ini akan memicu event 'IncidentUpdated'
+        //    dan ditangani oleh 'SyncIncidentUpdate' (di queue)
+        $incident->save(); 
+
+        return back()->with('success', 'Laporan berhasil dibatalkan! Sinkronisasi berjalan.');
+    }
+
+
+    /**
      */
     public function destroy(Incident $incident)
     {
-        // 1. Cukup ubah status lokal
-        $incident->status = "Cancelled";
+        // Otorisasi (jika perlu)
+        // $this->authorize('delete', $incident);
+        
+        // (OPSIONAL) Kembalikan aset sebelum dihapus
+        $assetIds = $incident->assets()->pluck('id');
+        if ($assetIds->isNotEmpty()) {
+             Asset::whereIn('id', $assetIds)->update(['status' => 'In Use']);
+             // Picu event sinkronisasi aset jika perlu
+        }
 
-        // 2. Simpan. Ini akan memicu event 'IncidentUpdated'
-        $incident->save(); 
+        // Hapus insiden
+        $incident->delete();
 
-        // 3. Listener 'SyncIncidentUpdate' (yang sudah di-queue)
-        //    akan berjalan di background dan mengirim status "Cancelled"
-        //    ke aplikasi sumber_data tanpa menyebabkan deadlock.
-
-        return back()->with('success', 'Laporan berhasil dibatalkan! Sinkronisasi berjalan di latar belakang.');
+        // Event 'IncidentDeleted' akan terpicu dan
+        // 'SyncIncidentDelete' (di queue) akan menanganinya.
+        return back()->with('success', 'Laporan berhasil dihapus! Sinkronisasi berjalan.');
     }
 }

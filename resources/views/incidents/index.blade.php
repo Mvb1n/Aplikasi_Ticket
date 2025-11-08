@@ -58,9 +58,9 @@
                                                 <a href="{{ route('incidents.edit', $incident->id) }}" class="text-blue-600 hover:text-blue-900">Edit</a>
                                             @endcan
                                             @can('delete', $incident)
-                                            <form action="{{ route('incidents.destroy', $incident->id) }}" method="POST" class="inline" onsubmit="return confirm('Yakin ingin membatalkan laporan ini? Status aset terkait akan dikembalikan.');" style="display:inline;">
+                                            <form action="{{ route('incidents.cancel', $incident->id) }}" method="POST" class="inline" onsubmit="return confirm('Yakin ingin membatalkan laporan ini? Status aset terkait akan dikembalikan.');" style="display:inline;">
                                                 @csrf
-                                                @method('DELETE')
+                                                @method('PUT')
                                                 <button type="submit" class="text-red-600 hover:text-red-900">Batalkan</button>
                                             </form>
                                             @endcan
