@@ -118,60 +118,83 @@ class IncidentController extends Controller
         // 1. Otorisasi (Dari kode Anda)
         $this->authorize('update', $incident);
 
-        // 2. Validasi (Gabungan)
+        // 2. Validasi (Gabungan LENGKAP)
         $validatedData = $request->validate([
+            // Data dari form edit (jika ada)
             'title' => 'sometimes|required|string|max:255',
             'site_id' => 'sometimes|required|exists:sites,id',
             'location' => 'sometimes|required|string|max:255',
             'chronology' => 'sometimes|required|string',
             'asset_ids' => 'nullable|array',
+            
+            // Data dari form investigasi (show.blade.php)
             'investigation_notes' => 'nullable|string',
             'status' => 'required|in:Open,In Progress,Resolved,Closed,Cancelled',
             'assigned_to_user_id' => 'nullable|exists:users,id',
             
-            // --- MODIFIKASI ---
-            // Mengganti 'attachment' (singular) menjadi 'attachments' (plural, array)
-            // Ini untuk mendukung upload file baru dari form 'Investigasi & Aksi'
-            'attachments' => 'nullable|array',
-            'attachments.*' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240', // 10MB
+            // Validasi file terstruktur BARU
+            'incident_files'   => 'nullable|array',
+            'incident_files.*' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240',
+            
+            'asset_files'   => 'nullable|array',
+            'asset_files.*'   => 'nullable|array',
+            'asset_files.*.*' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240',
         ]);
 
-        // 3. Update model (Hanya field non-relasi & non-file)
-        // Kita gunakan Arr::except untuk membuang 'asset_ids' dan 'attachments'
-        // agar 'update()' tidak error.
-        $incident->update(Arr::except($validatedData, ['asset_ids', 'attachments']));
+        // 3. Update model (Hanya field non-file & non-relasi)
+        $incident->update(Arr::except($validatedData, [
+            'asset_ids', 'incident_files', 'asset_files'
+        ]));
         
-        // --- TAMBAHAN BARU: Logika File ---
-        // 4. Proses file attachment (jika ada)
-        $newAttachmentPaths = [];
-        if ($request->hasFile('attachments')) {
-            foreach ($request->file('attachments') as $file) {
+        // --- LOGIKA FILE BARU (DENGAN PERBAIKAN 'IF') ---
+        
+        // 4. Inisialisasi struktur path
+        $paths = json_decode($incident->attachment_paths, true) ?? [];
+        
+        // 5. Migrasi data LAMA (jika ada)
+        if (!empty($paths) && !isset($paths['incident_files']) && !isset($paths['asset_files'])) {
+            $paths = ['incident_files' => $paths, 'asset_files' => []];
+        } else {
+            $paths['incident_files'] = $paths['incident_files'] ?? [];
+            $paths['asset_files'] = $paths['asset_files'] ?? [];
+        }
 
-                // --- MENJADI INI ---
-                $originalName = $file->getClientOriginalName();
-                $safeName = preg_replace("/[^A-Za-z0-9\._-]/", '', $originalName);
-                $finalName = uniqid() . '_' . $safeName;
-                $path = $file->storeAs('attachments', $finalName, 'public'); 
-                // --- AKHIR PERUBAHAN ---
-                
-                $newAttachmentPaths[] = $path;
+        // 6. Proses upload "File Umum" (incident_files)
+        if (!empty($request->file('incident_files'))) { // <-- PERBAIKAN
+            foreach ($request->file('incident_files') as $file) {
+                $path = $this->storeFileWithOriginalName($file, 'attachments');
+                $paths['incident_files'][] = $path;
             }
         }
-        // Gabungkan file lama (dari sync) dengan file baru (dari upload ini)
-        $existingPaths = json_decode($incident->attachment_paths, true) ?? [];
-        $allPaths = array_merge($existingPaths, $newAttachmentPaths);
 
-        // Simpan array path yang sudah digabung
-        $incident->attachment_paths = !empty($allPaths) ? json_encode($allPaths) : null;
+        // 7. Proses upload "File per Aset" (asset_files)
+        if (!empty($request->file('asset_files'))) { // <-- PERBAIKAN
+            foreach ($request->file('asset_files') as $assetId => $files) {
+                if (!isset($paths['asset_files'][$assetId])) {
+                    $paths['asset_files'][$assetId] = [];
+                }
+                foreach ($files as $file) {
+                    $path = $this->storeFileWithOriginalName($file, 'attachments');
+                    $paths['asset_files'][$assetId][] = $path;
+                }
+            }
+        }
+
+        // 8. Simpan struktur JSON baru
+        $incident->attachment_paths = !empty($paths['incident_files']) || !empty($paths['asset_files']) 
+            ? json_encode($paths) 
+            : null;
+            
         $incident->save(); // Simpan perubahan attachment_paths
-        // --- AKHIR TAMBAHAN BARU ---
+        
+        // --- AKHIR LOGIKA FILE BARU ---
 
-        // 5. Sinkronisasi Aset (Dari kode Anda)
+        // 9. Sinkronisasi Aset (Dari kode Anda)
         if ($request->has('asset_ids')) {
             $incident->assets()->sync($request->asset_ids ?? []);
         }
         
-        // 6. Logika status aset (Dari kode Anda - SANGAT PENTING)
+        // 10. Logika status aset (Dari kode Anda)
         $newStatus = null;
         if (in_array($incident->status, ['Resolved', 'Closed'])) {
             $newStatus = 'Stolen/Lost';
@@ -184,7 +207,6 @@ class IncidentController extends Controller
             if ($assetIds->isNotEmpty()) {
                 Asset::whereIn('id', $assetIds)->update(['status' => $newStatus]);
                 
-                // Picu event untuk sinkronisasi aset (Dari kode Anda)
                 $updatedAssets = Asset::whereIn('id', $assetIds)->get();
                 foreach ($updatedAssets as $asset) {
                     event(new AssetUpdated($asset));
@@ -192,10 +214,30 @@ class IncidentController extends Controller
             }
         }
 
-        // 7. Redirect (Dari kode Anda)
+        // 11. Redirect (Dari kode Anda)
         return redirect()->route('incidents.show', $incident->id)
-                        ->with('success', 'Detail insiden berhasil diperbarui.');
+                         ->with('success', 'Detail insiden berhasil diperbarui.');
     }
+
+    /**
+     * ====================================================================
+     * PENTING: FUNGSI HELPER INI HARUS ADA DI DALAM CLASS
+     * ====================================================================
+     */
+    private function storeFileWithOriginalName($file, $folder)
+    {
+        if (!$file || !$file->isValid()) {
+            return null;
+        }
+        $originalName = $file->getClientOriginalName();
+        // Bersihkan nama file dari karakter aneh
+        $safeName = preg_replace("/[^A-Za-z0-9\._-]/", '', $originalName);
+        // Tambahkan prefix unik
+        $finalName = uniqid() . '_' . $safeName;
+        return $file->storeAs($folder, $finalName, 'public'); 
+    }
+
+
 
 
     /**
